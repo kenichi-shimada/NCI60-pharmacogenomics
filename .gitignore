@@ -1,5 +1,11 @@
-archive	
+archive
+archive*
+src/archive
+rmd/archive
 .DS_Store
 .Rhistory
 figs
 figs_moa
+tmp.*
+STL\ cmpd
+results
