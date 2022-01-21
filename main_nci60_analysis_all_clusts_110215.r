@@ -32,7 +32,7 @@ n.cores <- parallel:::detectCores() ## number of cores (this was originally run 
 
 ## load r functions to use in this analysis
 setwd(dir);setwd('src')
-source("rfunctions.r")
+source("rfunctions1.r")
 
 ## Load objects & trimming data?-----------------------------------------------------------
 setwd(dir);setwd("rda")
@@ -690,8 +690,6 @@ slp.nadph <- sapply(1:18,function(i){
 sorted.e <- names(sort(corrs[used.genes.ge10,1],decreasing=T))
 used.db <- list(redox=nadph.genes)
 ##
-setwd(dir)
-source("rfunctions1.r")
 n.split <- 1000##min(256,length(used.db))
 jn <- TEA.hpc2(sorted.e,used.db,nperm=10^6,wt="24:00:00",mem="2gb",
                n.split=n.split,jobname=paste("nadph-6-",i,sep=""),verbose=T)
