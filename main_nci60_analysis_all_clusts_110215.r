@@ -1,9 +1,3 @@
-## tentatively...
-##setwd(dir <- "~/Projects_BRS/2_pharmacogenomics/nci60_analysis/src")
-setwd("..");dir <- getwd()## your working directory (wd)
-setwd(dir);setwd("rda")
-load("04-20-15_everything_inc_gos_and_slps.rda")
-##
 #=================================================================================
 # Title:        Model-based clustering of GI50 profiles of NCI60 cell lines
 # Author:       Kenichi Shimada
@@ -11,14 +5,18 @@ load("04-20-15_everything_inc_gos_and_slps.rda")
 # R-version:    2.15.2 (2015-02-07)
 #=================================================================================
 
-## This script should be run inside the 'nci60_analysis' directory.
-## Each figure was already made and put in ./figs directory.
+## Note on 01/21/2022:
+## 
+## This script should be run inside the root directory of the nci60_analysis.
+## If redo the analysis after downloading the github repo
+## (https://github.com/kenichi-shimada/NCI60-pharmacogenomics), set the root dir of the repo to 'dir':
+##
+## setwd(dir <- "/root/of/github/repo/")
 
 ## working directory
 fig.dir <- paste(dir,"/figs",sep="") ## where you save figures under wd
 
 ## Load libraries -------------------------------------------------------------------------
-## if not installed already, install from CRAN or Bioconductor
 library(gplots) ## heatmap.2 function
 library(RColorBrewer) ## gradation of colors in heatmap
 library(mclust) ## model-based clustering
@@ -27,55 +25,54 @@ library(org.Hs.eg.db) ## Gene ID <=> Gene SYMBOL
 library(parallel) ## mclapply to use multiple cores 
 
 ## number of cores available in the machine
-n.cores <- parallel:::detectCores() ## number of cores (this was originally run in an 8-cores machine)
-## multicore is depricated, so if
+n.cores <- parallel:::detectCores() 
 
 ## load r functions to use in this analysis
-setwd(dir);setwd('src')
-source("rfunctions1.r")
+source("src/rfunctions.r")
 
-## Load objects & trimming data?-----------------------------------------------------------
-setwd(dir);setwd("rda")
-load("nci60-analysis.rda")
-## this file contains the following R objects:
+## Load objects & trimming data
+x <- load("rda/nci60-analysis.rda")
+
+## 'nci60-analysis.rda' contains the following R objects:
 
 ## gi: logGI50 values of 75446 (50839 unique) compounds in 59 cell lines
-
-## gi.fin: logGI50 values of 21 (10 unique) compounds in 59 cell lines
+## gi.fin: logGI50 values of 21 (10 unique) ferroptosis inducers in 59 cell lines
 ## tissues: cell line name and tissue origins
 ## log.txn.ge80: RMA-transformed microarray data of 59 cell lines, selected genes within top 80% IQRs
 ## corrs: matrix containing the Spearman correlation between
 ## es.pvals: Each pathway's enrichment score and the p-value computed using GSEA.
 ## msigdb: MsigDB pathway data (version 3.1)
 ## slogp.fin.gos: signed log P-values of ferroptosis-associted GOs, to generate Extended Data Fig. 9b
+
 ####################################################################################################
 ## Computing GI50 profiles from public repository ##################################################
 ####################################################################################################
+
 cmpds <- sub("\\..+","",rownames(gi)) ## 75446 compounds
 uniq.cmpds <- unique(cmpds) ## 50839 unique compounds
 
 ## Compute unique GI50 profiles by taking the median of the replicates
+system.time({ ## 222 secs/492secs
+  med.gi <- t(sapply(uniq.cmpds,function(cmpd){
+    ids <- which(cmpds %in% cmpd)
+    if(length(ids)==1){
+      x <- gi[ids,]
+      med.x <- x-median(x,na.rm=T)
+      return(med.x)
+    }else{
+      v <- apply(apply(gi[ids,],1,function(x)x <- x - median(x,na.rm=T)), ## median subtraction
+                 1,function(y)median(y,na.rm=T)) ## median of replicates
+      med.v <- v - median(v,na.rm=T)
+      return(med.v)
+    }
+  }))
+})
+save(med.gi,file="rda/med.gi.rda")
+
 if(0){
-  system.time({ ## 222 secs/492secs
-    med.gi <- t(sapply(uniq.cmpds,function(cmpd){
-      ids <- which(cmpds %in% cmpd)
-      if(length(ids)==1){
-        x <- gi[ids,]
-        med.x <- x-median(x,na.rm=T)
-        return(med.x)
-      }else{
-        v <- apply(apply(gi[ids,],1,function(x)x <- x - median(x,na.rm=T)), ## median subtraction
-                   1,function(y)median(y,na.rm=T)) ## median of replicates
-        med.v <- v - median(v,na.rm=T)
-        return(med.v)
-      }
-    }))
-  })
-  save(med.gi,file="med.gi.rda")
-}else{
-    setwd(dir);setwd("rda")
-    load("med.gi.rda")
+  load("rda/med.gi.rda") # the rda file is available on github
 }
+
 ## Select GI50 profiles without missing values and whose IQR>0 : 6249 compounds
 n.tested.cells <- apply(med.gi,1,function(x)sum(!is.na(x)))
 iqrs <- apply(med.gi, 1, function(x)diff(quantile(x,c(.25,.75),na.rm=T))) #interquartile range (IQR)
@@ -94,7 +91,7 @@ used.gi.fin <- t(sapply(uniq.fin,function(ur){
   return(x)
 }))
 
-## replace a missing value with an estimate
+## impute a missing value
 used.gi.fin["MEII","LC:EKVX"] <- mean(used.gi.fin[c("AE","PE","erastin"),"LC:EKVX"])
 
 ####################################################################################################
@@ -138,18 +135,17 @@ if(0){## Fig. 4a: boxplot of cell-line selectivity (IQR of each GI50 profile)
   pdf("figure_4a.pdf",width=3,height=4)
   par(mar=c(7,4,1,7)+.1)
   mir <- used.iqrs.fin##;names(mir)[8] <- "RSL-CIL56"
-  mgi50 <-  list(mir,used.iqrs)
+  mgi50 <-  list(used.iqrs,mir)
   a <- boxplot(mgi50,border=NA,cex=0,axes=F)
   axis(2)
   axis(1,at=1:2,labels=c("Others","Ferroptosis"),las=2)
-  set.seed(1245)
-  points(jitter(rep(1,length(mgi50[[2]])),amount=.35),mgi50[[2]],pch=20,cex=.15,col="grey70")
-  boxplot(mgi50[2:1],cex=0,axes=F,add=T,border="grey40")
   set.seed(543)
+  boxplot(mgi50,cex=0,axes=F,add=T,border="grey40")
+  points(jitter(rep(1,length(mgi50[[1]])),amount=.35),mgi50[[1]],pch=20,cex=.15,col="grey20")
   cols <- brewer.pal(6,"Set1")
-  iqrs.fins.cols <- "grey20"##cols[c(2,2,2,2,3,3,3,1,3)]
-  abline(h=min(mgi50[[1]][-1]),col=2,lty=2)
-  points(jitter(rep(2,length(mgi50[[1]])),amount=.2),mgi50[[1]],pch=20,cex=.7,col=iqrs.fins.cols)
+  set.seed(1245)
+  abline(h=min(mgi50[[2]][-1]),col=2,lty=2)
+  points(jitter(rep(2,length(mgi50[[2]])),amount=.2),mgi50[[2]],pch=20,cex=.7,col="grey20")
   dev.off()
 }
 
@@ -161,20 +157,16 @@ sele.gi <- rbind(used.gi[has.large.iqr,],used.gi.fin) ## GI50 values of 2565 cel
 ## Model-based clustering of GI50 profiles of cell line-selectie comopunds #########################
 ####################################################################################################
 ## find the optimal model and # of clusters
-if(0){
-  n.clusts.range <-  40:60
-  system.time({## 244 secs
-    bics <- mclustBIC(sele.gi,G=n.clusts.range,modelNames=c("EII","VII"),
-                      prior=priorControl())
-  })
-  max.ind <- which(bics==max(bics),arr.ind=T)
-  model <- colnames(bics)[max.ind[2]] ## optimal model: VII
-  g <- as.numeric(rownames(bics)[max.ind[1]]) ## optimal # of clusters: 53
-}else{
-  g <-  53
-}
+n.clusts.range <-  20:80
+system.time({## 244 secs
+  bics <- mclustBIC(sele.gi,G=n.clusts.range,modelNames=c("EII","VII"),
+                    prior=priorControl())
+})
+max.ind <- which(bics==max(bics),arr.ind=T)
+model <- colnames(bics)[max.ind[2]] ## optimal model: VII
+g <- as.numeric(rownames(bics)[max.ind[1]]) ## optimal # of clusters: 53 - not always the same?
+## It also looks like mclust algorithm changed. g = 39 when run on 1/21/2022
 
-##
 if(0){
   ## Figure choose the optimal number of clusters
   pdf("choose_n_clusters_with_BIC.pdf")
@@ -184,23 +176,19 @@ if(0){
   abline(v=g,col=2)
   dev.off()
 }
-model <- c("VII","EII")[1]
+
 ##
-library(mclust)
-if(0){
-  system.time(mc <- Mclust(sele.gi,G=g,modelNames=model,prior=priorControl())) ## 47 secs
-  save(mc,file="mc.rda")
-}else{
-  load("mc.rda")
-}
+system.time(mc <- Mclust(sele.gi,G=g,modelNames=model,prior=priorControl())) ## 47 secs
+save(mc,file="rda/mc.rda")
 
 ## Discover the ferroptosis cluster
 mem <- mc$classification ## compounds' memberships
+table(mem)
 mem.fins <- mem[uniq.fin]
 fin.clust <- names(sort(table(mem.fins),decreasing=T))[1] ## ferroptosis cluster is "1"-st cluster
 
 ## GI50 profile of each cluster
-gi.clust <- sapply(seq(g),function(m)apply(sele.gi[mem==m,],2,median)) ## gi50 profiles of the 53 clusters
+gi.clust <- sapply(seq(g),function(m)apply(sele.gi[mem==m,,drop=F],2,median)) ## gi50 profiles of the 53 clusters
 colnames(gi.clust) <- as.character(seq(g))
 
 if(0){
@@ -223,8 +211,9 @@ if(0){
             Colv=FALSE,dendrogram="row")
   dev.off()
 }
-## more stats
-if(1){
+
+## more summary stats
+if(0){
     ## iqrs
     pdf("figure_4d_boxplot_iqr.pdf",width=2,height=5) ##fig.4d
     sele.iqrs <- apply(sele.gi,1,IQR)
@@ -232,6 +221,7 @@ if(1){
     names(clust.iqrs) <- seq(g)
     boxplot(clust.iqrs[as.character(xx$rowInd)],las=2,col="lightblue",horizontal=T,cex=.1,pch=20,cex.axis=.3,lwd=.5)
     dev.off()
+
     ## iqrs - n.cmpds
     n.cmpds.clust <- sapply(clust.iqrs,length)
     clust.iqrs.med <- sapply(clust.iqrs,median)
@@ -242,6 +232,7 @@ if(1){
     points(clust.iqrs.med,n.cmpds.clust,pch=20,col=rep(2:1,c(1,52)))
     ## average RMS - n.cmpds
 }
+
 ##
 if(0){
   setwd(dir)
@@ -251,7 +242,7 @@ if(0){
 }
 
 ## 53 -> 18 clusters
-setwd(dir);source("src/cutree_110215.r")
+source("src/cutree_110215.r")
 
 #######################################################################################
 ## Transcriptome analysis of the ferroptosis cluster ##################################
@@ -261,7 +252,7 @@ setwd(dir);source("src/cutree_110215.r")
 ## used GENELOGIC's U133 array data (RMA-normalized)
 ## Order of cell lines should be the sames between GI50 matrix and transcription matrix
 
-t.gi50 <- t(gi.clust18) ##transpose GI50 profiles
+t.gi50 <- t(gi.clust) ##transpose GI50 profiles
 colnames(t.gi50) <- sub(":",".",colnames(t.gi50))
 
 txn <- log.txn.ge80[,colnames(t.gi50)] ## transcriptional expression
@@ -279,20 +270,17 @@ GOs.ge10 <- msigdb.ge10[grep("^GO",names(msigdb.ge10))] ## 1222 gene sets are Ge
 
 ## Spearman correlation btwn each gene expression and each GI50 profile among 59 cell lines
 ## 10850 genes x 53 compound clusters ## 152 secs with n.cores=8
-if(0){
-  system.time(corrs <- mclapply(rownames(t.gi50),function(cmpd){
-    sapply(used.genes.ge10,function(gid){
-      cor(txn[gid,],t.gi50[cmpd,],method="spearman",use="complete.obs")
-    })
-  },mc.cores=(n.cores-1)))
-  corrs <- do.call(cbind,corrs)
-  colnames(corrs) <- rownames(t.gi50)
-  rownames(corrs) <- used.genes.ge10
-  save(corrs,file="corrs.rda")
-}else{
-    setwd(dir);setwd("rda")
-    load("corrs.rda")
-}
+system.time(corrs <- mclapply(rownames(t.gi50),function(cmpd){
+  sapply(used.genes.ge10,function(gid){
+    cor(txn[gid,],t.gi50[cmpd,],method="spearman",use="complete.obs")
+  })
+},mc.cores=(n.cores-1)))
+
+corrs <- do.call(cbind,corrs)
+colnames(corrs) <- rownames(t.gi50)
+rownames(corrs) <- used.genes.ge10
+save(corrs,file="rda/corrs.rda")
+
 pos.ordered.genes <- names(sort(corrs[used.genes.ge10,fin.clust],decreasing=T))
 
 ## scatterplots (txn.exppression vs GI50) of the largest and smallest correlations
@@ -335,45 +323,45 @@ system.time(es.grps <- sapply(grps,function(grp){
     })
 })) ## 16.8 secs
 
-if(0){
-    sig.gos.all <- lapply(grps,function(this.clust){
-        pos.ordered.genes <- names(sort(corrs[used.genes.ge10,this.clust],decreasing=T))
-        ##[1st-criterion: significance] Computing the significance of the enrichment score with 1000 permutations
-        es.pvals <- mclapply(GOs.ge10,function(go){ ## 418 secs
-            cat("*")
-            pvals.ES.GSEA(pos.ordered.genes,go,nperm=1000) ## enrichment score and P-values for each GO term
-        },mc.cores=(n.cores-1))
-        slogps <- sapply(es.pvals,function(x){ ## signed log P-values
-            p <- x$p.val
-            slogp <- -log10(p)*sign(x$ES)
-            return(slogp)
-        })
+##
+## 1/21/22 checked up to here.
+##
 
-        ##[2nd-criterion: exclusiveness] Computing enrichment scores of each GO term against 53 clusters
-        this.gos <- apply(es.grps,1,function(x){
-            x <- unlist(x)
-            s <- sort(x,decreasing=T)
-            if (names(s)[1]==this.clust){
-                return("pos")
-            }else if(names(s)[length(s)]==this.clust){
-                return("neg")
-            }else{
-                return("NA")
-            }
-        })
-        
-        ## summary: GOs satisfying both criteria.
-        pos.corr.gos <- names(which(this.gos=="pos"&slogps==Inf)) ## 13 GOs (15??)
-        neg.corr.gos <- names(which(this.gos=="neg"&slogps==-Inf)) ## 4 GOs
-
+sig.gos.all <- lapply(grps,function(this.clust){
+    pos.ordered.genes <- names(sort(corrs[used.genes.ge10,this.clust],decreasing=T))
+    ##[1st-criterion: significance] Computing the significance of the enrichment score with 1000 permutations
+    es.pvals <- mclapply(GOs.ge10,function(go){ ## 418 secs
         cat("*")
-        return(list(pos=pos.corr.gos,neg=neg.corr.gos))
+        pvals.ES.GSEA(pos.ordered.genes,go,nperm=1000) ## enrichment score and P-values for each GO term
+    },mc.cores=(n.cores-1))
+    slogps <- sapply(es.pvals,function(x){ ## signed log P-values
+        p <- x$p.val
+        slogp <- -log10(p)*sign(x$ES)
+        return(slogp)
     })
-    save(sig.gos.all,file="sig.gos.all-18.rda")
-}else{
-    setwd(dir);setwd("rda")
-    load("sig.gos.all-18.rda")
-}
+
+    ##[2nd-criterion: exclusiveness] Computing enrichment scores of each GO term against 53 clusters
+    this.gos <- apply(es.grps,1,function(x){
+        x <- unlist(x)
+        s <- sort(x,decreasing=T)
+        if (names(s)[1]==this.clust){
+            return("pos")
+        }else if(names(s)[length(s)]==this.clust){
+            return("neg")
+        }else{
+            return("NA")
+        }
+    })
+    
+    ## summary: GOs satisfying both criteria.
+    pos.corr.gos <- names(which(this.gos=="pos"&slogps==Inf)) ## 13 GOs (15??)
+    neg.corr.gos <- names(which(this.gos=="neg"&slogps==-Inf)) ## 4 GOs
+
+    cat("*")
+    return(list(pos=pos.corr.gos,neg=neg.corr.gos))
+})
+save(sig.gos.all,file="rda/sig.gos.all-18.rda")
+
 l2 <- sapply(sig.gos.all,function(x)sapply(x,length))
 colnames(l2) <- grps
 
@@ -451,12 +439,12 @@ if(0){
     save(jns6,file="jns_020115_10.6.rda")#10^6 
     
     ##
-    
     for(i in 1:18){
         cat("*")
         jn <- jns6[i]
         outs <- call.TEA.out(jn)
     }
+
     slp18.2 <- sapply(1:18,function(i){
         cat("*")
         jn <- jns6[i]
@@ -490,9 +478,9 @@ if(0){
     if(0)save.image("020215-upto-jns7.rda")
 }
     
-##################################################
 setwd(dir <- "/Users/kenichi/Desktop/pharmacogenomics/nci60_analysis")
 load("020215-upto-jns7.rda")
+
 ##################################################
 if(0){
   slp18.3 <- sapply(1:18,function(i){
@@ -574,10 +562,10 @@ names(sigs) <- colnames(gi.clust18)
 sig.names <- sub("^GO_","",unique(unlist(sigs)));names(sig.names) <- c()
 setwd(dir <- "~/Projects/TF_TEA/505_sd7/nci60_analysis/")
 save(sig.names,file="go.names.rda")
+
 ##
 m <- sapply(sigs,function(x)length(unlist(x)))
 
-## 10^8... probably need some more sophisticated methods...
 if(0){
     sig.gos <- c(pos.corr.gos,neg.corr.gos)
     names(sig.gos) <- c("GO:0015674","GO:0006732","GO:0006807","GO:0030001","GO:0009308","GO:0006812",
@@ -586,6 +574,8 @@ if(0){
     names(pos.corr.gos) <- names(sig.gos[1:13])
     names(neg.corr.gos) <- names(sig.gos[14:17])
 }
+
+
 
 ####################################################################################################
 ## Analysis of Overlapped genes between GOs ########################################################
