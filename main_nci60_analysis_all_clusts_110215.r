@@ -28,7 +28,7 @@ library(parallel) ## mclapply to use multiple cores
 n.cores <- parallel:::detectCores() 
 
 ## load r functions to use in this analysis
-source("src/rfunctions.r")
+source("src/rutils.r")
 
 ## Load objects & trimming data
 x <- load("rda/nci60-analysis.rda")
