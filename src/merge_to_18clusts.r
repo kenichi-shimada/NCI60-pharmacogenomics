@@ -36,7 +36,7 @@ n.clust18 <- sapply(m18,function(m)sum(as.character(mem) %in% m)) ## gi50 profil
 
 ##
 if(0){
-    ## for making Fig. 4b
+    ## Fig. 4b
     cols <- colorRampPalette(rev(brewer.pal(11,"RdBu")))(257)
     pdf("figure_2_heatmap18.pdf",width=7,height=5) ##heatmap
     yy <- heatmap.2(t(gi.clust18),col=cols,trace="none",

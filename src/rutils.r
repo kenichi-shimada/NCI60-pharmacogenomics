@@ -140,35 +140,6 @@ TEA.hpc2 <- function (sorted.genes, target.sets, nperm = 10^6, all = F,
         jobname <- paste(tstamp,"-",jobname,sep="")
     }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     ## 
     setwd(tempdir())
     if(!jobname %in% dir())dir.create(jobname)
