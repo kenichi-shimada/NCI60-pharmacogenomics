@@ -8,9 +8,9 @@ Please see [the html](rmd/main_nci60_analysis_all_clusts_012017.html) (generated
 ### Full analysis
 See [main_nci60_analysis.r](main_nci60_analysis.r) for the full analysis.
 
-```r
-sessionInfo()
-```
+### R `sessionInfo()`
+
+Note that some packages (e.g., *mclust* package) requires to use the specific version. The latest version couldn't recapitulate some of my analysis. For switching older versions of R and using a specific library, refer to [this](https://github.com/kenichi-shimada/Simple_R_envs).
 
 	## R version 3.3.2 (2016-10-31)
 	## Platform: x86_64-apple-darwin13.4.0 (64-bit)
