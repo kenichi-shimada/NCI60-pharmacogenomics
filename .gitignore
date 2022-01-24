@@ -1,6 +1,7 @@
 .DS_Store
 .Rhistory
 .Rprofile
+.Renviron
 
 archive*
 src/archive
@@ -13,3 +14,5 @@ tmp.*
 STL\ cmpd
 results
 hpc_temp
+
+run_R.sh
